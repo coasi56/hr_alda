@@ -29,6 +29,7 @@ app.post('/slack/events', express.raw({ type: 'application/json' }), (req, res, 
 
 app.use(express.json());
 
+app.get('/', (_req, res) => res.json({ message: 'HR알다 백엔드 API' }));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/api/auth', authRoutes);
