@@ -1,0 +1,29 @@
+{
+  "name": "hr-alda-backend",
+  "version": "1.0.0",
+  "description": "HR알다 - Slack 연동 HR 자동화 시스템 백엔드",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "build": "echo \"No build step required\"",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.22.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "googleapis": "^144.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

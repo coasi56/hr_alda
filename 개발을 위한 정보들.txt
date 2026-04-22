@@ -1,0 +1,9 @@
+##ngrok 정보
+Forwarding: https://underwent-encroach-pox.ngrok-free.dev -> http://localhost:3000
+
+
+
+
+
+##tokens
+#ngrok authtoken : 3CgyERnLUeZuIMYAfognZ2eJSxL_539ivVTwGkQ86J6cePafe
