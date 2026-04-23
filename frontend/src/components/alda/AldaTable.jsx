@@ -40,9 +40,9 @@ export default function AldaTable({ reactions = [] }) {
           {reactions.map((r) => (
             <tr key={r.id}>
               <td><EmojiBadge emoji={r.emoji} /></td>
-              <td style={{ color: 'var(--text-muted)' }}>@{r.fromSlackId}</td>
-              <td style={{ fontWeight: 500 }}>@{r.toSlackId}</td>
-              <td style={{ color: 'var(--text-muted)' }}>#{r.channelId}</td>
+              <td style={{ color: 'var(--text-muted)' }}>@{r.giverName || r.fromSlackId}</td>
+              <td style={{ fontWeight: 500 }}>@{r.receiverName || r.toSlackId}</td>
+              <td style={{ color: 'var(--text-muted)' }}>#{r.channelName || r.channelId}</td>
               <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{formatKST(r.createdAt)}</td>
             </tr>
           ))}
