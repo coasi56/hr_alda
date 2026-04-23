@@ -7,10 +7,10 @@ function startSchedulers() {
     // require('./aldaReset').run();
   });
 
-  // 매일 00:00 KST (UTC 15:00) — 생일/기념일 체크
-  cron.schedule('0 15 * * *', () => {
-    console.log('[scheduler] birthday check');
-    // require('./birthdayCheck').run();
+  // 매일 10:00 KST (UTC 01:00) — 생일/기념일 체크
+  cron.schedule('0 1 * * *', () => {
+    console.log('[scheduler] birthday check 시작');
+    require('./birthdayCheck').run();
   });
 
   // 매분 — 예약 공지 발송 체크
