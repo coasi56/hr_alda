@@ -1,2 +1,3 @@
 hralda-*.json
 google-credentials.json
+backend/.env
