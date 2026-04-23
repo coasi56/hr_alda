@@ -112,7 +112,7 @@ module.exports = (app) => {
       console.error('[alda] 이름 조회 실패 (ID로 대체):', err.message);
     }
 
-    const result = aldaService.addReaction({
+    const result = await aldaService.addReaction({
       fromSlackId,
       toSlackId,
       emoji,

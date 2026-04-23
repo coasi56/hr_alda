@@ -7,7 +7,7 @@ module.exports = (app) => {
     await ack();
     try {
       const weekStart = aldaService.getWeekStart();
-      const sentCount = aldaService.getSentCount(command.user_id, weekStart);
+      const sentCount = await aldaService.getSentCount(command.user_id, weekStart);
       const left = aldaService.WEEKLY_LIMIT - sentCount;
       const icon = left === 0 ? '😅' : left <= 3 ? '💛' : '🎉';
 

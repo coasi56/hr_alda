@@ -121,7 +121,7 @@ module.exports = (app) => {
     try {
       const period = view.state.values.period_block.period_select.selected_option.value;
       const userId = body.user.id;
-      const received = aldaService.queryReceived(userId, period);
+      const received = await aldaService.queryReceived(userId, period);
 
       console.log(`[alda] /alda_check | user=${userId} period=${period} count=${received.length}`);
 

@@ -2,7 +2,7 @@ require('dotenv').config();
 const { createServer } = require('http');
 const app = require('./app');
 const { initSlack } = require('./config/slack');
-const { testConnection } = require('./config/database');
+const { testConnection, initDb } = require('./config/database');
 const { startSchedulers } = require('./schedulers');
 
 const PORT = process.env.PORT || 3000;
@@ -11,6 +11,7 @@ async function start() {
   if (process.env.NODE_ENV === 'production') {
     await testConnection();
   }
+  await initDb();
 
   const server = createServer(app);
 

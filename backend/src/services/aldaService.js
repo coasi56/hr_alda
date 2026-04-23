@@ -1,43 +1,66 @@
-// In-memory store for Phase 1 (DB 없이 테스트용)
+const { pool } = require('../config/database');
+
 const ALDA_EMOJIS = new Set(['알다-칭찬', '알다-신뢰', '알다-주도성', '알다-원팀']);
 const WEEKLY_LIMIT = 10;
 
-// reactions: [{ id, fromSlackId, toSlackId, emoji, channelId, messageTs, weekStart, createdAt }]
-const reactions = [];
-// weeklyLimits: Map<"userId:weekStart", sentCount>
-const weeklyLimits = new Map();
-
-let nextId = 1;
-
 function getWeekStart(date = new Date()) {
   const d = new Date(date);
-  const day = d.getUTCDay(); // 0=Sun, 1=Mon ... 6=Sat
+  const day = d.getUTCDay(); // 0=Sun … 6=Sat
   const diff = day === 0 ? -6 : 1 - day; // shift to Monday
   d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
-}
-
-function getSentCount(userId, weekStart) {
-  return weeklyLimits.get(`${userId}:${weekStart}`) ?? 0;
-}
-
-function incrementSentCount(userId, weekStart) {
-  const key = `${userId}:${weekStart}`;
-  weeklyLimits.set(key, (weeklyLimits.get(key) ?? 0) + 1);
-}
-
-function decrementSentCount(userId, weekStart) {
-  const key = `${userId}:${weekStart}`;
-  const current = weeklyLimits.get(key) ?? 0;
-  if (current > 0) weeklyLimits.set(key, current - 1);
+  return d.toISOString().slice(0, 10); // 'YYYY-MM-DD'
 }
 
 function isAldaEmoji(emoji) {
   return ALDA_EMOJIS.has(emoji);
 }
 
-// 리액션 추가 처리. 반환값: { ok, reason, reaction? }
-function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs, giverName, receiverName, channelName, messageText, permalinkUrl }) {
+function mapRow(row) {
+  return {
+    id:           row.id,
+    fromSlackId:  row.from_slack_id,
+    giverName:    row.giver_name,
+    toSlackId:    row.to_slack_id,
+    receiverName: row.receiver_name,
+    emoji:        row.emoji,
+    channelId:    row.channel_id,
+    channelName:  row.channel_name,
+    messageTs:    row.message_ts,
+    messageText:  row.message_text,
+    permalinkUrl: row.permalink_url,
+    weekStart:    String(row.week_start).slice(0, 10),
+    createdAt:    row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  };
+}
+
+// period → { sql, params } — startIdx: 이 절에서 사용할 첫 번째 $N
+function buildPeriodWhere(period, startIdx = 1) {
+  if (period === 'today') {
+    return { sql: `DATE(created_at) = CURRENT_DATE`, params: [] };
+  }
+  if (period === 'this_week') {
+    return { sql: `week_start = $${startIdx}`, params: [getWeekStart()] };
+  }
+  if (period === 'this_month') {
+    return { sql: `DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())`, params: [] };
+  }
+  return { sql: null, params: [] }; // 'all'
+}
+
+// 주간 발송 횟수 조회
+async function getSentCount(userId, weekStart) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM reactions WHERE from_slack_id = $1 AND week_start = $2`,
+    [userId, weekStart]
+  );
+  return rows[0].cnt;
+}
+
+// 리액션 추가 처리. 반환값: { ok, reason?, reaction? }
+async function addReaction({
+  fromSlackId, toSlackId, emoji, channelId, messageTs,
+  giverName, receiverName, channelName, messageText, permalinkUrl,
+}) {
   if (!isAldaEmoji(emoji)) return { ok: false, reason: 'not_alda_emoji' };
 
   if (fromSlackId === toSlackId) {
@@ -46,141 +69,159 @@ function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs, give
   }
 
   const weekStart = getWeekStart();
-  const sentCount = getSentCount(fromSlackId, weekStart);
+  const sentCount = await getSentCount(fromSlackId, weekStart);
 
   if (sentCount >= WEEKLY_LIMIT) {
     console.log(`[alda] ❌ 주간 한도 초과 | giver=${giverName ?? fromSlackId} sent=${sentCount}/${WEEKLY_LIMIT} week=${weekStart}`);
     return { ok: false, reason: 'weekly_limit_exceeded', sentCount, limit: WEEKLY_LIMIT };
   }
 
-  const reaction = {
-    id: nextId++,
-    fromSlackId,
-    giverName: giverName || fromSlackId,
-    toSlackId,
-    receiverName: receiverName || toSlackId,
-    emoji,
-    channelId,
-    channelName: channelName || channelId,
-    messageTs,
-    messageText: messageText || null,
-    permalinkUrl: permalinkUrl || null,
-    weekStart,
-    createdAt: new Date().toISOString(),
-  };
+  const { rows } = await pool.query(
+    `INSERT INTO reactions
+       (from_slack_id, to_slack_id, emoji, channel_id, channel_name,
+        giver_name, receiver_name, message_ts, message_text, permalink_url, week_start)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING *`,
+    [
+      fromSlackId, toSlackId, emoji, channelId, channelName || channelId,
+      giverName || fromSlackId, receiverName || toSlackId,
+      messageTs, messageText || null, permalinkUrl || null, weekStart,
+    ]
+  );
 
-  reactions.push(reaction);
-  incrementSentCount(fromSlackId, weekStart);
-
+  const reaction = mapRow(rows[0]);
   console.log(
     `[alda] ✅ 리액션 추가 | ${reaction.giverName} → ${reaction.receiverName} ` +
     `emoji=:${emoji}: #${reaction.channelName} sent=${sentCount + 1}/${WEEKLY_LIMIT} week=${weekStart}`
   );
-
   return { ok: true, reaction };
 }
 
-// 리액션 제거 처리. 반환값: { ok, removed }
-function removeReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs }) {
+// 리액션 제거 처리. 반환값: { ok, reason?, removed? }
+async function removeReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs }) {
   if (!isAldaEmoji(emoji)) return { ok: false, reason: 'not_alda_emoji' };
 
-  const idx = reactions.findLastIndex(
-    (r) =>
-      r.fromSlackId === fromSlackId &&
-      r.toSlackId === toSlackId &&
-      r.emoji === emoji &&
-      r.messageTs === messageTs
+  const { rows } = await pool.query(
+    `DELETE FROM reactions
+     WHERE id = (
+       SELECT id FROM reactions
+       WHERE from_slack_id = $1 AND to_slack_id = $2 AND emoji = $3 AND message_ts = $4
+       ORDER BY created_at DESC LIMIT 1
+     )
+     RETURNING *`,
+    [fromSlackId, toSlackId, emoji, messageTs]
   );
 
-  if (idx === -1) {
+  if (rows.length === 0) {
     console.log(`[alda] ⚠️  제거할 리액션 없음 | giver=${fromSlackId} emoji=:${emoji}: ts=${messageTs}`);
     return { ok: false, reason: 'not_found' };
   }
 
-  const [removed] = reactions.splice(idx, 1);
-  decrementSentCount(fromSlackId, removed.weekStart);
-
-  console.log(
-    `[alda] ↩️  리액션 제거 | giver=${fromSlackId} → receiver=${toSlackId} ` +
-    `emoji=:${emoji}: channel=${channelId}`
-  );
-
-  return { ok: true, removed };
-}
-
-function getReactions() {
-  return [...reactions];
-}
-
-function getWeeklyStats(weekStart = getWeekStart()) {
-  return reactions.filter((r) => r.weekStart === weekStart);
-}
-
-// period: 'today' | 'this_week' | 'this_month' | 'all'
-function makePeriodFilter(period) {
-  const now = new Date();
-  if (period === 'today') {
-    const today = now.toISOString().slice(0, 10);
-    return (r) => r.createdAt.slice(0, 10) === today;
-  }
-  if (period === 'this_week') {
-    const wk = getWeekStart();
-    return (r) => r.weekStart === wk;
-  }
-  if (period === 'this_month') {
-    const month = now.toISOString().slice(0, 7);
-    return (r) => r.createdAt.slice(0, 7) === month;
-  }
-  return () => true; // 'all'
+  console.log(`[alda] ↩️  리액션 제거 | giver=${fromSlackId} → receiver=${toSlackId} emoji=:${emoji}: channel=${channelId}`);
+  return { ok: true, removed: mapRow(rows[0]) };
 }
 
 // 관리자용: 전체 리액션 조회
-function queryAll(period) {
-  const filter = makePeriodFilter(period);
-  return reactions.filter(filter);
+async function queryAll(period) {
+  const { sql, params } = buildPeriodWhere(period);
+  const where = sql ? `WHERE ${sql}` : '';
+  const { rows } = await pool.query(
+    `SELECT * FROM reactions ${where} ORDER BY created_at DESC`,
+    params
+  );
+  return rows.map(mapRow);
 }
 
 // 관리자용: 요약 통계
-function queryStats(period) {
-  const filtered = queryAll(period);
+async function queryStats(period) {
+  const { sql, params } = buildPeriodWhere(period);
+  const where = sql ? `WHERE ${sql}` : '';
+
+  const [totalsRes, emojiRes] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(*)::int AS total,
+              COUNT(DISTINCT from_slack_id)::int AS unique_givers,
+              COUNT(DISTINCT to_slack_id)::int AS unique_receivers
+       FROM reactions ${where}`,
+      params
+    ),
+    pool.query(
+      `SELECT emoji, COUNT(*)::int AS cnt FROM reactions ${where} GROUP BY emoji`,
+      params
+    ),
+  ]);
+
+  const { total, unique_givers, unique_receivers } = totalsRes.rows[0];
   const byEmoji = {};
-  for (const r of filtered) {
-    byEmoji[r.emoji] = (byEmoji[r.emoji] ?? 0) + 1;
-  }
-  const uniqueGivers = new Set(filtered.map((r) => r.fromSlackId)).size;
-  const uniqueReceivers = new Set(filtered.map((r) => r.toSlackId)).size;
-  return { total: filtered.length, byEmoji, uniqueGivers, uniqueReceivers };
+  for (const r of emojiRes.rows) byEmoji[r.emoji] = r.cnt;
+  return { total, byEmoji, uniqueGivers: unique_givers, uniqueReceivers: unique_receivers };
 }
 
 // 내가 받은 리액션 조회
-function queryReceived(userId, period) {
-  const filter = makePeriodFilter(period);
-  return reactions.filter((r) => r.toSlackId === userId && filter(r));
+async function queryReceived(userId, period) {
+  const { sql, params } = buildPeriodWhere(period, 2);
+  const where = sql ? `AND ${sql}` : '';
+  const { rows } = await pool.query(
+    `SELECT * FROM reactions WHERE to_slack_id = $1 ${where} ORDER BY created_at DESC`,
+    [userId, ...params]
+  );
+  return rows.map(mapRow);
 }
 
-// Top N 수신자 집계 [{ slackId, receiverName, count, byEmoji: { emoji: count } }]
-function queryTopReceivers(period, limit = 5) {
-  const filter = makePeriodFilter(period);
-  const counts = {};
-  for (const r of reactions) {
-    if (!filter(r)) continue;
-    if (!counts[r.toSlackId]) {
-      counts[r.toSlackId] = { total: 0, byEmoji: {}, receiverName: r.receiverName || r.toSlackId };
-    }
-    counts[r.toSlackId].total += 1;
-    counts[r.toSlackId].byEmoji[r.emoji] = (counts[r.toSlackId].byEmoji[r.emoji] ?? 0) + 1;
+// Top N 수신자 집계 [{ slackId, receiverName, count, byEmoji }]
+async function queryTopReceivers(period, limit = 5) {
+  const { sql, params } = buildPeriodWhere(period);
+  const where = sql ? `WHERE ${sql}` : '';
+
+  const { rows: topRows } = await pool.query(
+    `SELECT to_slack_id, MAX(receiver_name) AS receiver_name, COUNT(*)::int AS total
+     FROM reactions ${where}
+     GROUP BY to_slack_id
+     ORDER BY total DESC
+     LIMIT $${params.length + 1}`,
+    [...params, limit]
+  );
+
+  if (topRows.length === 0) return [];
+
+  const ids = topRows.map((r) => r.to_slack_id);
+  const { sql: eSql, params: eParams } = buildPeriodWhere(period, 2);
+  const eWhere = eSql ? `AND ${eSql}` : '';
+
+  const { rows: emojiRows } = await pool.query(
+    `SELECT to_slack_id, emoji, COUNT(*)::int AS cnt
+     FROM reactions
+     WHERE to_slack_id = ANY($1) ${eWhere}
+     GROUP BY to_slack_id, emoji`,
+    [ids, ...eParams]
+  );
+
+  const emojiMap = {};
+  for (const r of emojiRows) {
+    if (!emojiMap[r.to_slack_id]) emojiMap[r.to_slack_id] = {};
+    emojiMap[r.to_slack_id][r.emoji] = r.cnt;
   }
-  return Object.entries(counts)
-    .sort(([, a], [, b]) => b.total - a.total)
-    .slice(0, limit)
-    .map(([slackId, { total, byEmoji, receiverName }]) => ({ slackId, receiverName, count: total, byEmoji }));
+
+  return topRows.map((r) => ({
+    slackId:      r.to_slack_id,
+    receiverName: r.receiver_name,
+    count:        r.total,
+    byEmoji:      emojiMap[r.to_slack_id] ?? {},
+  }));
+}
+
+async function getWeeklyStats(weekStart = getWeekStart()) {
+  const { rows } = await pool.query(
+    `SELECT * FROM reactions WHERE week_start = $1 ORDER BY created_at DESC`,
+    [weekStart]
+  );
+  return rows.map(mapRow);
 }
 
 module.exports = {
   isAldaEmoji,
   addReaction,
   removeReaction,
-  getReactions,
   getWeeklyStats,
   getWeekStart,
   getSentCount,

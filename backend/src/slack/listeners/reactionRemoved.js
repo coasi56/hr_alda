@@ -8,7 +8,7 @@ module.exports = (app) => {
 
     if (item.type !== 'message' || !toSlackId) return;
 
-    aldaService.removeReaction({
+    await aldaService.removeReaction({
       fromSlackId,
       toSlackId,
       emoji,

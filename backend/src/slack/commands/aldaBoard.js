@@ -113,7 +113,7 @@ module.exports = (app) => {
   app.view('alda_board_submit', async ({ ack, view }) => {
     try {
       const period = view.state.values.period_block.period_select.selected_option.value;
-      const topList = aldaService.queryTopReceivers(period, 5);
+      const topList = await aldaService.queryTopReceivers(period, 5);
 
       console.log(`[alda] /alda_board | period=${period} top=${topList.length}명`);
 
