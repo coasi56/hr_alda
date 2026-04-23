@@ -13,7 +13,7 @@ const settingsRoutes = require('./routes/settings');
 
 const app = express();
 
-// CORS 설정 수정
+// CORS 설정
 app.use(cors({ 
   origin: [
     'http://localhost:5173',
@@ -26,17 +26,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// express.json() 이전에 등록 — url_verification에 즉시 응답하고,
-// 다른 Slack 이벤트는 raw Buffer를 그대로 넘겨 Bolt가 서명 검증에 사용할 수 있게 함
-app.post('/slack/events', express.raw({ type: 'application/json' }), (req, res, next) => {
-  try {
-    const body = JSON.parse(req.body.toString('utf8'));
-    if (body.type === 'url_verification') {
-      return res.json({ challenge: body.challenge });
-    }
-  } catch (_) {}
-  next();
-});
+// /slack/events는 Bolt가 전담 처리 — 여기서 건드리지 않음
+// url_verification은 Bolt 내부에서 자동 처리됨
 
 app.use(express.json());
 
