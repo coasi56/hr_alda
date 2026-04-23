@@ -79,5 +79,44 @@ router.post('/test-run', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/birthday/holidays — 공휴일 목록
+router.get('/holidays', authMiddleware, async (req, res) => {
+  try {
+    const { year } = req.query;
+    const result = await pool.query(
+      'SELECT * FROM holidays WHERE year = $1 ORDER BY date ASC',
+      [year || new Date().getFullYear()]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/birthday/holidays — 공휴일 추가
+router.post('/holidays', authMiddleware, async (req, res) => {
+  try {
+    const { date, name } = req.body;
+    const year = new Date(date).getFullYear();
+    await pool.query(
+      'INSERT INTO holidays (date, name, year) VALUES ($1, $2, $3)',
+      [date, name, year]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/birthday/holidays/:id — 공휴일 삭제
+router.delete('/holidays/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM holidays WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 module.exports = router;

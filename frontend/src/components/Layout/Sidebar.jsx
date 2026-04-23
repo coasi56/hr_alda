@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
 
 const NAV = [
-  { to: '/alda', icon: '⭐', label: '알다 인정' },
+  { to: '/alda',     icon: '⭐', label: '알다 인정' },
+  { to: '/birthday', icon: '🎂', label: '생일·기념일' },
 ];
 
 export default function Sidebar() {
@@ -48,7 +49,7 @@ export default function Sidebar() {
       </nav>
 
       <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 11, color: 'var(--sidebar-text)', textAlign: 'center' }}>
-        v0.1.0 · Phase 3
+        v0.2.0 · Phase 3
       </div>
     </aside>
   );

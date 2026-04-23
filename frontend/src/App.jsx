@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth.js';
 import Login from './pages/Login.jsx';
 import AldaPage from './pages/AldaPage.jsx';
+import BirthdayPage from './pages/BirthdayPage.jsx';
 import Sidebar from './components/Layout/Sidebar.jsx';
 import Header from './components/Layout/Header.jsx';
 
@@ -27,10 +28,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/alda"
-            element={<ProtectedLayout><AldaPage /></ProtectedLayout>}
-          />
+          <Route path="/alda" element={<ProtectedLayout><AldaPage /></ProtectedLayout>} />
+          <Route path="/birthday" element={<ProtectedLayout><BirthdayPage /></ProtectedLayout>} />
           <Route path="*" element={<Navigate to="/alda" replace />} />
         </Routes>
       </BrowserRouter>

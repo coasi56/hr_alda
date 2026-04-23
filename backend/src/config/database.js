@@ -94,15 +94,17 @@ async function initDb() {
     ON CONFLICT (id) DO NOTHING
   `);
 
-  // 기본 템플릿 없으면 삽입
-  await pool.query(`
-    INSERT INTO birthday_templates (type, channel, content) VALUES
-      ('birthday', 'public', ':birthday: 오늘은 {{이름}}님의 생일이에요!\n@here 모두 함께 축하해주세요 :tada:'),
-      ('birthday', 'dm', '{{이름}}님, 생일 축하드려요 :birthday:\n생일 복리후생 안내드려요 :point_down:'),
-      ('anniversary', 'public', ':tada: 오늘은 {{이름}}님의 입사 {{연차}}주년이에요!\n@here 함께해줘서 고마워요 :blue_heart:'),
-      ('anniversary', 'dm', '{{이름}}님, 입사 {{연차}}주년을 축하해요 :tada:\n복리후생 안내드려요 :point_down:')
-    ON CONFLICT DO NOTHING
-  `);
+  // 기본 템플릿 없으면 삽입 (최초 1회만)
+  const tmplCount = await pool.query('SELECT COUNT(*) FROM birthday_templates');
+  if (parseInt(tmplCount.rows[0].count) === 0) {
+    await pool.query(`
+      INSERT INTO birthday_templates (type, channel, content) VALUES
+        ('birthday', 'public', ':birthday: 오늘은 {{이름}}님의 생일이에요!\n@here 모두 함께 축하해주세요 :tada:'),
+        ('birthday', 'dm', '{{이름}}님, 생일 축하드려요 :birthday:\n생일 복리후생 안내드려요 :point_down:'),
+        ('anniversary', 'public', ':tada: 오늘은 {{이름}}님의 입사 {{연차}}주년이에요!\n@here 함께해줘서 고마워요 :blue_heart:'),
+        ('anniversary', 'dm', '{{이름}}님, 입사 {{연차}}주년을 축하해요 :tada:\n복리후생 안내드려요 :point_down:')
+    `);
+  }
 
   console.log('[db] 모든 테이블 준비 완료');
 }
