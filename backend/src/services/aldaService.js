@@ -37,11 +37,11 @@ function isAldaEmoji(emoji) {
 }
 
 // 리액션 추가 처리. 반환값: { ok, reason, reaction? }
-function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs }) {
+function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs, giverName, receiverName, channelName }) {
   if (!isAldaEmoji(emoji)) return { ok: false, reason: 'not_alda_emoji' };
 
   if (fromSlackId === toSlackId) {
-    console.log(`[alda] ❌ 자기 리액션 방지 | giver=${fromSlackId} emoji=:${emoji}:`);
+    console.log(`[alda] ❌ 자기 리액션 방지 | giver=${giverName ?? fromSlackId} emoji=:${emoji}:`);
     return { ok: false, reason: 'self_reaction' };
   }
 
@@ -49,16 +49,19 @@ function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs }) {
   const sentCount = getSentCount(fromSlackId, weekStart);
 
   if (sentCount >= WEEKLY_LIMIT) {
-    console.log(`[alda] ❌ 주간 한도 초과 | giver=${fromSlackId} sent=${sentCount}/${WEEKLY_LIMIT} week=${weekStart}`);
+    console.log(`[alda] ❌ 주간 한도 초과 | giver=${giverName ?? fromSlackId} sent=${sentCount}/${WEEKLY_LIMIT} week=${weekStart}`);
     return { ok: false, reason: 'weekly_limit_exceeded', sentCount, limit: WEEKLY_LIMIT };
   }
 
   const reaction = {
     id: nextId++,
     fromSlackId,
+    giverName: giverName || fromSlackId,
     toSlackId,
+    receiverName: receiverName || toSlackId,
     emoji,
     channelId,
+    channelName: channelName || channelId,
     messageTs,
     weekStart,
     createdAt: new Date().toISOString(),
@@ -68,8 +71,8 @@ function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs }) {
   incrementSentCount(fromSlackId, weekStart);
 
   console.log(
-    `[alda] ✅ 리액션 추가 | giver=${fromSlackId} → receiver=${toSlackId} ` +
-    `emoji=:${emoji}: channel=${channelId} sent=${sentCount + 1}/${WEEKLY_LIMIT} week=${weekStart}`
+    `[alda] ✅ 리액션 추가 | ${reaction.giverName} → ${reaction.receiverName} ` +
+    `emoji=:${emoji}: #${reaction.channelName} sent=${sentCount + 1}/${WEEKLY_LIMIT} week=${weekStart}`
   );
 
   return { ok: true, reaction };
@@ -153,20 +156,22 @@ function queryReceived(userId, period) {
   return reactions.filter((r) => r.toSlackId === userId && filter(r));
 }
 
-// Top N 수신자 집계 [{ slackId, count, byEmoji: { emoji: count } }]
+// Top N 수신자 집계 [{ slackId, receiverName, count, byEmoji: { emoji: count } }]
 function queryTopReceivers(period, limit = 5) {
   const filter = makePeriodFilter(period);
   const counts = {};
   for (const r of reactions) {
     if (!filter(r)) continue;
-    if (!counts[r.toSlackId]) counts[r.toSlackId] = { total: 0, byEmoji: {} };
+    if (!counts[r.toSlackId]) {
+      counts[r.toSlackId] = { total: 0, byEmoji: {}, receiverName: r.receiverName || r.toSlackId };
+    }
     counts[r.toSlackId].total += 1;
     counts[r.toSlackId].byEmoji[r.emoji] = (counts[r.toSlackId].byEmoji[r.emoji] ?? 0) + 1;
   }
   return Object.entries(counts)
     .sort(([, a], [, b]) => b.total - a.total)
     .slice(0, limit)
-    .map(([slackId, { total, byEmoji }]) => ({ slackId, count: total, byEmoji }));
+    .map(([slackId, { total, byEmoji, receiverName }]) => ({ slackId, receiverName, count: total, byEmoji }));
 }
 
 module.exports = {
