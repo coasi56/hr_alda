@@ -13,7 +13,18 @@ const settingsRoutes = require('./routes/settings');
 
 const app = express();
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+// CORS 설정 수정
+app.use(cors({ 
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://hr-alda.vercel.app',
+    'https://hralda-bd82w7hce-hahapapa.vercel.app'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // express.json() 이전에 등록 — url_verification에 즉시 응답하고,
 // 다른 Slack 이벤트는 raw Buffer를 그대로 넘겨 Bolt가 서명 검증에 사용할 수 있게 함
