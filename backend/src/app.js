@@ -26,10 +26,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// /slack/events는 Bolt가 전담 처리 — 여기서 건드리지 않음
-// url_verification은 Bolt 내부에서 자동 처리됨
-
-app.use(express.json());
+// /slack/events 는 express.json() 제외 — Bolt가 직접 처리
+app.use((req, res, next) => {
+  if (req.path === '/slack/events') return next();
+  express.json()(req, res, next);
+});
 
 app.get('/', (_req, res) => res.json({ message: 'HR알다 백엔드 API' }));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
