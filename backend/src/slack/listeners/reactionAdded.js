@@ -1,14 +1,65 @@
 const aldaService = require('../../services/aldaService');
 
-// Slack API 5개를 병렬 호출해 이름·메시지·링크 반환
-// 각 항목이 실패해도 null/ID fallback으로 서비스 중단 방지
+function sanitize(text) {
+  return text.replace(/:[a-z0-9_+\-]+:/gi, '').replace(/\s+/g, ' ').trim();
+}
+
+function truncate(text, maxLen) {
+  return text.length > maxLen ? text.slice(0, maxLen) + '...' : text;
+}
+
+// 메시지 텍스트 조회 — top-level → 스레드 순서로 순차 시도
+async function fetchMessageText(client, channelId, messageTs) {
+  // 1단계: conversations.history (일반 채널 메시지)
+  try {
+    const res = await client.conversations.history({
+      channel: channelId,
+      latest: messageTs,
+      limit: 1,
+      inclusive: true,
+    });
+    // ts를 직접 비교해서 정확한 메시지만 사용
+    const msg = res.messages?.find((m) => m.ts === messageTs);
+    if (msg?.text) {
+      console.log('[alda] 메시지 조회 성공 (history)');
+      return truncate(sanitize(msg.text), 50);
+    }
+  } catch (err) {
+    console.warn('[alda] conversations.history 실패:', err.message);
+  }
+
+  // 2단계: conversations.replies (스레드 메시지 fallback)
+  // messageTs를 thread_ts로 사용 — 스레드 부모 or DM 스레드에 리액션 달린 경우 커버
+  try {
+    const res = await client.conversations.replies({
+      channel: channelId,
+      ts: messageTs,
+      latest: messageTs,
+      limit: 1,
+      inclusive: true,
+    });
+    const msg = res.messages?.find((m) => m.ts === messageTs);
+    if (msg?.text) {
+      console.log('[alda] 메시지 조회 성공 (replies)');
+      return truncate(sanitize(msg.text), 50);
+    }
+  } catch (err) {
+    console.warn('[alda] conversations.replies 실패:', err.message);
+  }
+
+  return null;
+}
+
+// 이름·채널·링크는 병렬, 메시지 텍스트는 순차 fallback — 모두 동시에 시작
 async function fetchNames(client, fromSlackId, toSlackId, channelId, messageTs) {
-  const [giverRes, receiverRes, channelRes, historyRes, permalinkRes] = await Promise.allSettled([
-    client.users.info({ user: fromSlackId }),
-    client.users.info({ user: toSlackId }),
-    client.conversations.info({ channel: channelId }),
-    client.conversations.history({ channel: channelId, latest: messageTs, limit: 1, inclusive: true }),
-    client.chat.getPermalink({ channel: channelId, message_ts: messageTs }),
+  const [[giverRes, receiverRes, channelRes, permalinkRes], messageText] = await Promise.all([
+    Promise.allSettled([
+      client.users.info({ user: fromSlackId }),
+      client.users.info({ user: toSlackId }),
+      client.conversations.info({ channel: channelId }),
+      client.chat.getPermalink({ channel: channelId, message_ts: messageTs }),
+    ]),
+    fetchMessageText(client, channelId, messageTs),
   ]);
 
   function extractUserName(result, fallback) {
@@ -22,13 +73,6 @@ async function fetchNames(client, fromSlackId, toSlackId, channelId, messageTs) 
     return result.value.channel.name || fallback;
   }
 
-  function extractMessageText(result) {
-    if (result.status !== 'fulfilled' || !result.value.ok) return null;
-    const text = result.value.messages?.[0]?.text ?? '';
-    if (!text) return null;
-    return text.length > 50 ? text.slice(0, 50) + '...' : text;
-  }
-
   function extractPermalink(result) {
     if (result.status !== 'fulfilled' || !result.value.ok) return null;
     return result.value.permalink ?? null;
@@ -38,7 +82,7 @@ async function fetchNames(client, fromSlackId, toSlackId, channelId, messageTs) 
     giverName: extractUserName(giverRes, fromSlackId),
     receiverName: extractUserName(receiverRes, toSlackId),
     channelName: extractChannelName(channelRes, channelId),
-    messageText: extractMessageText(historyRes),
+    messageText,
     permalinkUrl: extractPermalink(permalinkRes),
   };
 }
