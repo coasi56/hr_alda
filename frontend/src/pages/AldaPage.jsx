@@ -89,7 +89,7 @@ export default function AldaPage() {
           {top.data && top.data.length === 0 && (
             <div className="state-box">데이터 없음</div>
           )}
-          {top.data && top.data.map(({ slackId, count }, idx) => (
+          {top.data && top.data.map(({ slackId, receiverName, count }, idx) => (
             <div
               key={slackId}
               style={{
@@ -102,7 +102,7 @@ export default function AldaPage() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16, minWidth: 24 }}>{RANK_ICONS[idx]}</span>
-                <span style={{ fontSize: 13, color: 'var(--text)' }}>@{slackId}</span>
+                <span style={{ fontSize: 13, color: 'var(--text)' }}>@{receiverName || slackId}</span>
               </div>
               <span style={{
                 fontSize: 13,
