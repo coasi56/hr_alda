@@ -37,7 +37,7 @@ function isAldaEmoji(emoji) {
 }
 
 // 리액션 추가 처리. 반환값: { ok, reason, reaction? }
-function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs, giverName, receiverName, channelName }) {
+function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs, giverName, receiverName, channelName, messageText, permalinkUrl }) {
   if (!isAldaEmoji(emoji)) return { ok: false, reason: 'not_alda_emoji' };
 
   if (fromSlackId === toSlackId) {
@@ -63,6 +63,8 @@ function addReaction({ fromSlackId, toSlackId, emoji, channelId, messageTs, give
     channelId,
     channelName: channelName || channelId,
     messageTs,
+    messageText: messageText || null,
+    permalinkUrl: permalinkUrl || null,
     weekStart,
     createdAt: new Date().toISOString(),
   };

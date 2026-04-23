@@ -1,12 +1,14 @@
 const aldaService = require('../../services/aldaService');
 
-// users.info / conversations.info를 병렬로 호출해 표시 이름 반환
-// 실패 시 Slack ID/채널 ID를 그대로 반환 (서비스 중단 방지)
-async function fetchNames(client, fromSlackId, toSlackId, channelId) {
-  const [giverRes, receiverRes, channelRes] = await Promise.allSettled([
+// Slack API 5개를 병렬 호출해 이름·메시지·링크 반환
+// 각 항목이 실패해도 null/ID fallback으로 서비스 중단 방지
+async function fetchNames(client, fromSlackId, toSlackId, channelId, messageTs) {
+  const [giverRes, receiverRes, channelRes, historyRes, permalinkRes] = await Promise.allSettled([
     client.users.info({ user: fromSlackId }),
     client.users.info({ user: toSlackId }),
     client.conversations.info({ channel: channelId }),
+    client.conversations.history({ channel: channelId, latest: messageTs, limit: 1, inclusive: true }),
+    client.chat.getPermalink({ channel: channelId, message_ts: messageTs }),
   ]);
 
   function extractUserName(result, fallback) {
@@ -20,10 +22,24 @@ async function fetchNames(client, fromSlackId, toSlackId, channelId) {
     return result.value.channel.name || fallback;
   }
 
+  function extractMessageText(result) {
+    if (result.status !== 'fulfilled' || !result.value.ok) return null;
+    const text = result.value.messages?.[0]?.text ?? '';
+    if (!text) return null;
+    return text.length > 50 ? text.slice(0, 50) + '...' : text;
+  }
+
+  function extractPermalink(result) {
+    if (result.status !== 'fulfilled' || !result.value.ok) return null;
+    return result.value.permalink ?? null;
+  }
+
   return {
     giverName: extractUserName(giverRes, fromSlackId),
     receiverName: extractUserName(receiverRes, toSlackId),
     channelName: extractChannelName(channelRes, channelId),
+    messageText: extractMessageText(historyRes),
+    permalinkUrl: extractPermalink(permalinkRes),
   };
 }
 
@@ -43,11 +59,11 @@ module.exports = (app) => {
       return;
     }
 
-    // 이름 조회 — 실패해도 ID fallback으로 진행
-    let names = { giverName: fromSlackId, receiverName: toSlackId, channelName: item.channel };
+    // 이름·메시지·링크 조회 — 실패해도 ID fallback으로 진행
+    let names = { giverName: fromSlackId, receiverName: toSlackId, channelName: item.channel, messageText: null, permalinkUrl: null };
     try {
-      names = await fetchNames(client, fromSlackId, toSlackId, item.channel);
-      console.log(`[alda] 이름 조회 완료 | ${names.giverName} → ${names.receiverName} (#${names.channelName})`);
+      names = await fetchNames(client, fromSlackId, toSlackId, item.channel, item.ts);
+      console.log(`[alda] 조회 완료 | ${names.giverName} → ${names.receiverName} (#${names.channelName}) msg="${names.messageText ?? ''}"`);
     } catch (err) {
       console.error('[alda] 이름 조회 실패 (ID로 대체):', err.message);
     }

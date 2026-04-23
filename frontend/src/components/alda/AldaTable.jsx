@@ -33,6 +33,8 @@ export default function AldaTable({ reactions = [] }) {
             <th>보낸 사람</th>
             <th>받은 사람</th>
             <th>채널</th>
+            <th>메시지</th>
+            <th>링크</th>
             <th>시간 (KST)</th>
           </tr>
         </thead>
@@ -43,6 +45,16 @@ export default function AldaTable({ reactions = [] }) {
               <td style={{ color: 'var(--text-muted)' }}>@{r.giverName || r.fromSlackId}</td>
               <td style={{ fontWeight: 500 }}>@{r.receiverName || r.toSlackId}</td>
               <td style={{ color: 'var(--text-muted)' }}>#{r.channelName || r.channelId}</td>
+              <td style={{ color: 'var(--text-muted)', fontSize: 12, maxWidth: 200 }}>
+                {r.messageText
+                  ? (r.messageText.length > 30 ? r.messageText.slice(0, 30) + '...' : r.messageText)
+                  : '-'}
+              </td>
+              <td>
+                {r.permalinkUrl
+                  ? <a href={r.permalinkUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontSize: 12, fontWeight: 500, textDecoration: 'none' }}>열기 ↗</a>
+                  : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+              </td>
               <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{formatKST(r.createdAt)}</td>
             </tr>
           ))}
